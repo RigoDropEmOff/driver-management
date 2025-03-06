@@ -465,6 +465,18 @@ const manualEntryInput = document.getElementById("manual-entry-input");
 const manualEntrySubmit = document.getElementById("manual-entry-submit");
 const manualEntryCancel = document.getElementById("manual-entry-cancel");
 
+// Debugging function for form data
+function debugFormData(formData) {
+    console.log("Form Data Submission Debug:");
+    for (let [key, value] of formData.entries()) {
+        if (key === 'photo_data') {
+            console.log(`${key}: ${value ? value.substring(0, 100) + '...' : 'No photo data'} (${value ? value.length : 0} chars)`);
+        } else {
+            console.log(`${key}: ${value}`);
+        }
+    }
+}
+
 // Manual Check-In
 manualCardButton.addEventListener("click", () => {
     manualEntryTitle.textContent = "Enter Card ID for Check-In";
@@ -513,7 +525,12 @@ manualEntrySubmit.addEventListener("click", () => {
         const truckLicense = document.getElementById("truck_license").value;
         const purposeOfVisit = document.getElementById("purpose_of_visit").value || "";
         const pointOfContact = document.getElementById("point_of_contact").value || "";
-        const photoData = document.getElementById("photo-data").value;
+        let photoData = document.getElementById("photo-data").value;
+
+        // Ensure photo data is properly formatted
+        if (photoData && !photoData.startsWith('data:image')) {
+            photoData = 'data:image/jpeg;base64,' + photoData;
+        }
 
         // Log data for debugging
         console.log("Checking in driver with data:", {
@@ -533,49 +550,78 @@ manualEntrySubmit.addEventListener("click", () => {
         formData.append("point_of_contact", pointOfContact);
         formData.append("photo_data", photoData);
 
-        // Submit the form
+        // Debug form data
+        debugFormData(formData);
+
+        // Submit the form with AJAX header
         fetch("/drivers", {
             method: "POST",
             body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         })
         .then((response) => {
-            if (response.ok) {
+            console.log("Response Status:", response.status);
+            
+            // Try to parse as JSON first
+            return response.json().catch(() => {
+                // If not JSON, log the text and throw an error
+                return response.text().then(text => {
+                    console.error("Non-JSON response:", text);
+                    throw new Error("Received non-JSON response");
+                });
+            });
+        })
+        .then((data) => {
+            console.log("Server Response:", data);
+            
+            if (data.success) {
                 alert("Driver checked in successfully!");
                 location.reload(); // Refresh the page to update the list
             } else {
-                // Try to get error details
-                return response.text().then(errorText => {
-                    console.error("Check-in failed:", errorText);
-                    alert("Failed to check in driver. " + errorText);
-                });
+                alert("Failed to check in: " + (data.message || "Unknown error"));
             }
         })
         .catch((err) => {
-            console.error("Error during check-in:", err);
-            alert("An error occurred. Please try again.");
+            console.error("Full submission error:", err);
+            alert("Error during submission: " + err.message);
         });
 
         manualEntryDialog.style.display = "none";
     } else if (mode === "checkout") {
         // Process checkout directly
         fetch(`/checkout/${encodeURIComponent(cardId)}`, {
-            method: "POST"
+            method: "POST",
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
         })
         .then(response => {
-            if (response.ok) {
+            console.log("Checkout Response Status:", response.status);
+            
+            // Try to parse as JSON first
+            return response.json().catch(() => {
+                // If not JSON, log the text and throw an error
+                return response.text().then(text => {
+                    console.error("Non-JSON response:", text);
+                    throw new Error("Received non-JSON response");
+                });
+            });
+        })
+        .then(data => {
+            console.log("Checkout Server Response:", data);
+            
+            if (data.success) {
                 alert("Driver checked out successfully!");
                 location.reload();
             } else {
-                // Try to get error details
-                return response.text().then(errorText => {
-                    console.error("Check-out failed:", errorText);
-                    alert("Failed to check out driver. " + errorText);
-                });
+                alert("Failed to check out: " + (data.message || "Unknown error"));
             }
         })
         .catch(err => {
             console.error("Error during check out:", err);
-            alert("An error occurred. Please try again.");
+            alert("An error occurred: " + err.message);
         });
         
         manualEntryDialog.style.display = "none";
