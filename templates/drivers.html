@@ -70,6 +70,24 @@
 <div id="qr-reader" style="width: 100%; margin-top: 10px; display: none;"></div>
 <div id="checkout-qr-reader" style="display: none; margin-top: 10px; width: 100%;"></div>
 
+<!-- Manual Entry Buttons -->
+<div style="margin-top: 10px;">
+    <button type="button" id="manual-card-button" class="inline-button">Enter Card ID Manually</button>
+    <button type="button" id="manual-checkout-button" class="inline-button" style="background-color: #f44336;">Manual Check-Out</button>
+  </div>
+  
+  <!-- Manual Entry Dialog (hidden by default) -->
+  <div id="manual-entry-dialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.3); z-index: 1000;">
+    <h3 id="manual-entry-title">Enter Card ID</h3>
+    <input type="text" id="manual-entry-input" style="width: 100%; padding: 8px; margin: 10px 0;">
+    <div style="display: flex; justify-content: space-between;">
+      <button id="manual-entry-cancel">Cancel</button>
+      <button id="manual-entry-submit">Submit</button>
+    </div>
+  </div>
+
+
+
     <!-- Hidden Field to Store Captured Photo Data -->
     <input type="hidden" id="photo-data" name="photo_data">
 
@@ -125,212 +143,135 @@ const scanQrButton = document.getElementById("scan-qr-button");
 const qrReaderDiv = document.getElementById("qr-reader");
 const cardIdInput = document.getElementById("card_id");
 
-scanQrButton.addEventListener("click", async () => {
+scanQrButton.addEventListener("click", () => {
     qrReaderDiv.style.display = "block";
-    
-    try {
-        // Create video element for ZXing with specific constraints that work better on older devices
-        const video = document.createElement('video');
-        video.style.width = '100%';
-        video.setAttribute('playsinline', 'true'); // Important for iOS
-        video.setAttribute('autoplay', 'true');
-        video.setAttribute('muted', 'true');
-        
-        qrReaderDiv.innerHTML = ''; // Clear previous content
-        qrReaderDiv.appendChild(video);
-        
-        // Add cancel button
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.style.margin = '10px 0';
-        cancelButton.style.padding = '8px 16px';
-        qrReaderDiv.appendChild(cancelButton);
-        
-        // Explicitly request camera permissions first
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment',
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            }
-        });
-        
-        // Attach stream to video element
-        video.srcObject = stream;
-        await video.play();
-        
-        // Initialize ZXing codeReader
-        const codeReader = new ZXing.BrowserMultiFormatReader();
-        
-        // Use the stream directly for ZXing
-        const controls = await codeReader.decodeFromStream(stream, video, (result, err) => {
-            if (result) {
-                // QR code detected
-                const decodedText = result.getText();
-                console.log("QR Code detected:", decodedText);
-                
-                // Populate card ID field
-                cardIdInput.value = decodedText;
-                
-                // Stop the scanner
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
+
+    const html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start(
+        { facingMode: "environment" },
+        { 
+            fps: 5,
+            qrbox: {width: 300, height: 300},
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: false // Force older API
+            } 
+        }, // Lower frame rate, Larger QR box
+        // Success callback
+        (decodedText) => {
+            // Automatically populate the card ID field
+            cardIdInput.value = decodedText;
+
+            // Send data to the server for automatic check-in
+            const formData = new FormData();
+            formData.append("card_id", decodedText);
+
+            // Include other form fields if needed
+            const driverName = document.getElementById("driver_name").value;
+            const providerName = document.getElementById("provider_name").value;
+            const truckLicense = document.getElementById("truck_license").value;
+            const purposeOfVisit = document.getElementById("purpose_of_visit").value || ""; // Ensure it's not null
+            const pointOfContact = document.getElementById("point_of_contact").value || ""; // Ensure it's not null
+            const photoData = document.getElementById("photo-data").value;
+
+            console.log("Sending Data:", {
+                driver_name: driverName,
+                provider_name: providerName,
+                truck_license: truckLicense,
+                purpose_of_visit: purposeOfVisit,
+                point_of_contact: pointOfContact,
+                photo_data: photoData ? "[DATA]" : "none" // Don't log full photo data
+            });
+
+            formData.append("driver_name", driverName);
+            formData.append("provider_name", providerName);
+            formData.append("truck_license", truckLicense);
+            formData.append("purpose_of_visit", purposeOfVisit);
+            formData.append("point_of_contact", pointOfContact);
+            formData.append("photo_data", photoData);
+
+            fetch("/drivers", {
+                method: "POST",
+                body: formData,
+            })
+            .then((response) => {
+                if (response.ok) {
+                    alert("Driver checked in successfully!");
+                    location.reload(); // Refresh the page to update the list
+                } else {
+                    alert("Failed to check in driver. Please try again.");
                 }
-                codeReader.reset();
+            })
+            .catch((err) => {
+                console.error("Error during check-in:", err);
+                alert("An error occurred. Please try again.");
+            });
+
+            // Stop the QR code scanner
+            html5QrCode.stop().then(() => {
                 qrReaderDiv.style.display = "none";
-                
-                // Prepare form data
-                const formData = new FormData();
-                formData.append("card_id", decodedText);
-                
-                // Get other form fields
-                const driverName = document.getElementById("driver_name").value;
-                const providerName = document.getElementById("provider_name").value;
-                const truckLicense = document.getElementById("truck_license").value;
-                const purposeOfVisit = document.getElementById("purpose_of_visit").value || "";
-                const pointOfContact = document.getElementById("point_of_contact").value || "";
-                const photoData = document.getElementById("photo-data").value;
-                
-                // Add to form data
-                formData.append("driver_name", driverName);
-                formData.append("provider_name", providerName);
-                formData.append("truck_license", truckLicense);
-                formData.append("purpose_of_visit", purposeOfVisit);
-                formData.append("point_of_contact", pointOfContact);
-                formData.append("photo_data", photoData);
-                
-                // Submit the form
-                fetch("/drivers", {
-                    method: "POST",
-                    body: formData,
-                })
-                .then((response) => {
-                    if (response.ok) {
-                        alert("Driver checked in successfully!");
-                        location.reload();
-                    } else {
-                        alert("Failed to check in driver. Please try again.");
-                    }
-                })
-                .catch((err) => {
-                    console.error("Error during check-in:", err);
-                    alert("An error occurred. Please try again.");
-                });
-            }
-            
-            if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.error("QR scanning error:", err);
-            }
-        });
-        
-        // Handle cancel button
-        cancelButton.addEventListener('click', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            codeReader.reset();
-            qrReaderDiv.style.display = "none";
-        });
-        
-    } catch (err) {
-        console.error("Camera access error:", err);
-        qrReaderDiv.innerHTML = `<p>Camera error: ${err.message}. Please check camera permissions.</p>`;
-        qrReaderDiv.style.display = "block";
-    }
+            }).catch((err) => {
+                console.error("Error stopping QR Code scanner:", err);
+            });
+        },
+        // Error callback - correctly positioned outside the success callback
+        (errorMessage) => {
+            console.warn("QR Code Scan Error:", errorMessage);
+        }
+    ).catch((err) => {
+        console.error("QR Code Scanner Initialization Error:", err);
+    });
 });
 
 // QR Code Scanner for Driver Check-Out
 const checkOutQrButton = document.getElementById("check-out-qr-button");
 const checkoutQrReaderDiv = document.getElementById("checkout-qr-reader");
 
-checkOutQrButton.addEventListener("click", async () => {
+checkOutQrButton.addEventListener("click", () => {
     checkoutQrReaderDiv.style.display = "block";
-    
-    try {
-        // Create video element for ZXing with specific constraints that work better on older devices
-        const video = document.createElement('video');
-        video.style.width = '100%';
-        video.setAttribute('playsinline', 'true'); // Important for iOS
-        video.setAttribute('autoplay', 'true');
-        video.setAttribute('muted', 'true');
-        
-        checkoutQrReaderDiv.innerHTML = ''; // Clear previous content
-        checkoutQrReaderDiv.appendChild(video);
-        
-        // Add cancel button
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.style.margin = '10px 0';
-        cancelButton.style.padding = '8px 16px';
-        checkoutQrReaderDiv.appendChild(cancelButton);
-        
-        // Explicitly request camera permissions first
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment',
-                width: { ideal: 640 },
-                height: { ideal: 480 }
+
+    const html5QrCode = new Html5Qrcode("checkout-qr-reader");
+    html5QrCode.start(
+        { facingMode: "environment" },
+        { 
+            fps: 5, 
+            qrbox: {width: 300, height: 300},
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: false // Force older API
             }
-        });
-        
-        // Attach stream to video element
-        video.srcObject = stream;
-        await video.play();
-        
-        // Initialize ZXing codeReader
-        const codeReader = new ZXing.BrowserMultiFormatReader();
-        
-        // Use the stream directly for ZXing
-        const controls = await codeReader.decodeFromStream(stream, video, (result, err) => {
-            if (result) {
-                // QR code detected
-                const decodedText = result.getText();
-                console.log("QR Code detected for checkout:", decodedText);
-                
-                // Stop the scanner
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
+        },
+        (decodedText) => {
+            console.log("Decoded QR Code for Check Out:", decodedText);
+
+            // Send the decoded text (card ID) to the server for check out
+            fetch(`/checkout/${encodeURIComponent(decodedText)}`, {
+                method: "POST"
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert("Driver checked out successfully!");
+                    location.reload();
+                } else {
+                    alert("Failed to check out driver. Please try again.");
                 }
-                codeReader.reset();
+            })
+            .catch(err => {
+                console.error("Error during check out:", err);
+                alert("An error occurred. Please try again.");
+            });
+
+            // Stop the QR code scanner
+            html5QrCode.stop().then(() => {
                 checkoutQrReaderDiv.style.display = "none";
-                
-                // Send to server for checkout
-                fetch(`/checkout/${encodeURIComponent(decodedText)}`, {
-                    method: "POST"
-                })
-                .then(response => {
-                    if (response.ok) {
-                        alert("Driver checked out successfully!");
-                        location.reload();
-                    } else {
-                        alert("Failed to check out driver. Please try again.");
-                    }
-                })
-                .catch(err => {
-                    console.error("Error during check out:", err);
-                    alert("An error occurred. Please try again.");
-                });
-            }
-            
-            if (err && !(err instanceof ZXing.NotFoundException)) {
-                console.error("QR scanning error:", err);
-            }
-        });
-        
-        // Handle cancel button
-        cancelButton.addEventListener('click', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            codeReader.reset();
-            checkoutQrReaderDiv.style.display = "none";
-        });
-        
-    } catch (err) {
-        console.error("Camera access error:", err);
-        checkoutQrReaderDiv.innerHTML = `<p>Camera error: ${err.message}. Please check camera permissions.</p>`;
-        checkoutQrReaderDiv.style.display = "block";
-    }
+            }).catch(err => {
+                console.error("Error stopping QR Code scanner:", err);
+            });
+        },
+        (errorMessage) => {
+            console.warn("QR Code Scan Error:", errorMessage);
+        }
+    ).catch((err) => {
+        console.error("QR Code Scanner Initialization Error:", err);
+    });
 });
 -->
 // Photo Capture Script using MediaDevices API
@@ -514,6 +455,79 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
+
+// Manual Card ID Entry
+const manualCardButton = document.getElementById("manual-card-button");
+const manualCheckoutButton = document.getElementById("manual-checkout-button");
+const manualEntryDialog = document.getElementById("manual-entry-dialog");
+const manualEntryTitle = document.getElementById("manual-entry-title");
+const manualEntryInput = document.getElementById("manual-entry-input");
+const manualEntrySubmit = document.getElementById("manual-entry-submit");
+const manualEntryCancel = document.getElementById("manual-entry-cancel");
+
+// Manual Check-In
+manualCardButton.addEventListener("click", () => {
+    manualEntryTitle.textContent = "Enter Card ID for Check-In";
+    manualEntryInput.value = "";
+    manualEntryDialog.style.display = "block";
+    manualEntryInput.focus();
+    
+    // Set mode to check-in
+    manualEntryDialog.dataset.mode = "checkin";
+});
+
+// Manual Check-Out
+manualCheckoutButton.addEventListener("click", () => {
+    manualEntryTitle.textContent = "Enter Card ID for Check-Out";
+    manualEntryInput.value = "";
+    manualEntryDialog.style.display = "block";
+    manualEntryInput.focus();
+    
+    // Set mode to check-out
+    manualEntryDialog.dataset.mode = "checkout";
+});
+
+// Cancel button
+manualEntryCancel.addEventListener("click", () => {
+    manualEntryDialog.style.display = "none";
+});
+
+// Submit button
+manualEntrySubmit.addEventListener("click", () => {
+    const cardId = manualEntryInput.value.trim();
+    if (!cardId) {
+        alert("Please enter a Card ID");
+        return;
+    }
+    
+    const mode = manualEntryDialog.dataset.mode;
+    
+    if (mode === "checkin") {
+        // Set the card ID in the form
+        cardIdInput.value = cardId;
+        manualEntryDialog.style.display = "none";
+        alert("Card ID set to: " + cardId);
+    } else if (mode === "checkout") {
+        // Process checkout directly
+        fetch(`/checkout/${encodeURIComponent(cardId)}`, {
+            method: "POST"
+        })
+        .then(response => {
+            if (response.ok) {
+                alert("Driver checked out successfully!");
+                location.reload();
+            } else {
+                alert("Failed to check out driver. Please try again.");
+            }
+        })
+        .catch(err => {
+            console.error("Error during check out:", err);
+            alert("An error occurred. Please try again.");
+        });
+        
+        manualEntryDialog.style.display = "none";
+    }
+});
     </script>
 </body>
 </html>
