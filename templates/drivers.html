@@ -321,44 +321,10 @@ manualEntrySubmit.addEventListener("click", () => {
     const mode = manualEntryDialog.dataset.mode;
     
     if (mode === "checkin") {
-        // Prepare form data for check-in
-        const formData = new FormData();
-        formData.append("card_id", cardId);
-
-        // Include other form fields
-        const driverName = document.getElementById("driver_name").value;
-        const providerName = document.getElementById("provider_name").value;
-        const truckLicense = document.getElementById("truck_license").value;
-        const purposeOfVisit = document.getElementById("purpose_of_visit").value || "";
-        const pointOfContact = document.getElementById("point_of_contact").value || "";
-        const photoData = document.getElementById("photo-data").value;
-
-        formData.append("driver_name", driverName);
-        formData.append("provider_name", providerName);
-        formData.append("truck_license", truckLicense);
-        formData.append("purpose_of_visit", purposeOfVisit);
-        formData.append("point_of_contact", pointOfContact);
-        formData.append("photo_data", photoData);
-
-        // Submit the form
-        fetch("/drivers", {
-            method: "POST",
-            body: formData,
-        })
-        .then((response) => {
-            if (response.ok) {
-                alert("Driver checked in successfully!");
-                location.reload(); // Refresh the page to update the list
-            } else {
-                alert("Failed to check in driver. Please try again.");
-            }
-        })
-        .catch((err) => {
-            console.error("Error during check-in:", err);
-            alert("An error occurred. Please try again.");
-        });
-
+        // Set the card ID in the form
+        cardIdInput.value = cardId;
         manualEntryDialog.style.display = "none";
+        alert("Card ID set to: " + cardId);
     } else if (mode === "checkout") {
         // Process checkout directly
         fetch(`/checkout/${encodeURIComponent(cardId)}`, {
@@ -610,10 +576,59 @@ manualEntrySubmit.addEventListener("click", () => {
     const mode = manualEntryDialog.dataset.mode;
     
     if (mode === "checkin") {
-        // Set the card ID in the form
-        cardIdInput.value = cardId;
+        // Prepare form data for check-in
+        const formData = new FormData();
+        formData.append("card_id", cardId);
+
+        // Include other form fields
+        const driverName = document.getElementById("driver_name").value;
+        const providerName = document.getElementById("provider_name").value;
+        const truckLicense = document.getElementById("truck_license").value;
+        const purposeOfVisit = document.getElementById("purpose_of_visit").value || "";
+        const pointOfContact = document.getElementById("point_of_contact").value || "";
+        const photoData = document.getElementById("photo-data").value;
+
+        // Log data for debugging
+        console.log("Checking in driver with data:", {
+            card_id: cardId,
+            driver_name: driverName,
+            provider_name: providerName,
+            truck_license: truckLicense,
+            purpose_of_visit: purposeOfVisit,
+            point_of_contact: pointOfContact,
+            photo_data: photoData ? "[DATA]" : "none"
+        });
+
+        formData.append("driver_name", driverName);
+        formData.append("provider_name", providerName);
+        formData.append("truck_license", truckLicense);
+        formData.append("purpose_of_visit", purposeOfVisit);
+        formData.append("point_of_contact", pointOfContact);
+        formData.append("photo_data", photoData);
+
+        // Submit the form
+        fetch("/drivers", {
+            method: "POST",
+            body: formData,
+        })
+        .then((response) => {
+            if (response.ok) {
+                alert("Driver checked in successfully!");
+                location.reload(); // Refresh the page to update the list
+            } else {
+                // Try to get error details
+                return response.text().then(errorText => {
+                    console.error("Check-in failed:", errorText);
+                    alert("Failed to check in driver. " + errorText);
+                });
+            }
+        })
+        .catch((err) => {
+            console.error("Error during check-in:", err);
+            alert("An error occurred. Please try again.");
+        });
+
         manualEntryDialog.style.display = "none";
-        alert("Card ID set to: " + cardId);
     } else if (mode === "checkout") {
         // Process checkout directly
         fetch(`/checkout/${encodeURIComponent(cardId)}`, {
@@ -624,7 +639,11 @@ manualEntrySubmit.addEventListener("click", () => {
                 alert("Driver checked out successfully!");
                 location.reload();
             } else {
-                alert("Failed to check out driver. Please try again.");
+                // Try to get error details
+                return response.text().then(errorText => {
+                    console.error("Check-out failed:", errorText);
+                    alert("Failed to check out driver. " + errorText);
+                });
             }
         })
         .catch(err => {
