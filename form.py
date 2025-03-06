@@ -123,20 +123,7 @@ def save_photo(photo_data, driver_license):
         #return the Cloudinary URL
         return upload_result['secure_url']
     
-        '''
-        # Save the image
-        filepath = os.path.join(upload_dir, filename)
-        print(f"Saving image to: {filepath}")  # Debugging print
-        with open(filepath, 'wb') as f:
-            f.write(image_data)
 
-        #retunr path with forward slashes for url
-        return 'uploads/' + filename
-    
-    
-        
-        print("Image saved successfully!")  # Debugging print
-        '''
     
     except Exception as e:
         print(f"Error saving photo: {e}")

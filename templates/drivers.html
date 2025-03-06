@@ -129,7 +129,16 @@
         const html5QrCode = new Html5Qrcode("qr-reader");
         html5QrCode.start(
             { facingMode: "environment" },
-            { fps: 10, qrbox: 250 },
+            { 
+            fps: 5,
+            qrbox: {width:300,height:300},
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: false //force older api
+            } 
+        }, //Lower frame rate, Larger qr box
+            
+            
+            
             (decodedText) => {
                 // Automatically populate the card ID field
                 cardIdInput.value = decodedText;
@@ -138,6 +147,11 @@
                 const formData = new FormData();
                 formData.append("card_id", decodedText);
 
+                //error handling
+                (errorMessage) => {
+                    console.warn("Qr Code Scan Error:", errorMessage);
+                }
+               
                 // Include other form fields if needed
                 const driverName = document.getElementById("driver_name").value;
                 const providerName = document.getElementById("provider_name").value;
