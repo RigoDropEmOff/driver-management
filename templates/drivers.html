@@ -273,6 +273,113 @@ checkOutQrButton.addEventListener("click", () => {
         console.error("QR Code Scanner Initialization Error:", err);
     });
 });
+
+// Manual Card ID Entry
+const manualCardButton = document.getElementById("manual-card-button");
+const manualCheckoutButton = document.getElementById("manual-checkout-button");
+const manualEntryDialog = document.getElementById("manual-entry-dialog");
+const manualEntryTitle = document.getElementById("manual-entry-title");
+const manualEntryInput = document.getElementById("manual-entry-input");
+const manualEntrySubmit = document.getElementById("manual-entry-submit");
+const manualEntryCancel = document.getElementById("manual-entry-cancel");
+
+// Manual Check-In
+manualCardButton.addEventListener("click", () => {
+    manualEntryTitle.textContent = "Enter Card ID for Check-In";
+    manualEntryInput.value = "";
+    manualEntryDialog.style.display = "block";
+    manualEntryInput.focus();
+    
+    // Set mode to check-in
+    manualEntryDialog.dataset.mode = "checkin";
+});
+
+// Manual Check-Out
+manualCheckoutButton.addEventListener("click", () => {
+    manualEntryTitle.textContent = "Enter Card ID for Check-Out";
+    manualEntryInput.value = "";
+    manualEntryDialog.style.display = "block";
+    manualEntryInput.focus();
+    
+    // Set mode to check-out
+    manualEntryDialog.dataset.mode = "checkout";
+});
+
+// Cancel button
+manualEntryCancel.addEventListener("click", () => {
+    manualEntryDialog.style.display = "none";
+});
+
+// Submit button
+manualEntrySubmit.addEventListener("click", () => {
+    const cardId = manualEntryInput.value.trim();
+    if (!cardId) {
+        alert("Please enter a Card ID");
+        return;
+    }
+    
+    const mode = manualEntryDialog.dataset.mode;
+    
+    if (mode === "checkin") {
+        // Prepare form data for check-in
+        const formData = new FormData();
+        formData.append("card_id", cardId);
+
+        // Include other form fields
+        const driverName = document.getElementById("driver_name").value;
+        const providerName = document.getElementById("provider_name").value;
+        const truckLicense = document.getElementById("truck_license").value;
+        const purposeOfVisit = document.getElementById("purpose_of_visit").value || "";
+        const pointOfContact = document.getElementById("point_of_contact").value || "";
+        const photoData = document.getElementById("photo-data").value;
+
+        formData.append("driver_name", driverName);
+        formData.append("provider_name", providerName);
+        formData.append("truck_license", truckLicense);
+        formData.append("purpose_of_visit", purposeOfVisit);
+        formData.append("point_of_contact", pointOfContact);
+        formData.append("photo_data", photoData);
+
+        // Submit the form
+        fetch("/drivers", {
+            method: "POST",
+            body: formData,
+        })
+        .then((response) => {
+            if (response.ok) {
+                alert("Driver checked in successfully!");
+                location.reload(); // Refresh the page to update the list
+            } else {
+                alert("Failed to check in driver. Please try again.");
+            }
+        })
+        .catch((err) => {
+            console.error("Error during check-in:", err);
+            alert("An error occurred. Please try again.");
+        });
+
+        manualEntryDialog.style.display = "none";
+    } else if (mode === "checkout") {
+        // Process checkout directly
+        fetch(`/checkout/${encodeURIComponent(cardId)}`, {
+            method: "POST"
+        })
+        .then(response => {
+            if (response.ok) {
+                alert("Driver checked out successfully!");
+                location.reload();
+            } else {
+                alert("Failed to check out driver. Please try again.");
+            }
+        })
+        .catch(err => {
+            console.error("Error during check out:", err);
+            alert("An error occurred. Please try again.");
+        });
+        
+        manualEntryDialog.style.display = "none";
+    }
+});
 -->
 // Photo Capture Script using MediaDevices API
 // Open Camera
