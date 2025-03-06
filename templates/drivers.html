@@ -6,6 +6,7 @@
     <title>Driver Management</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://unpkg.com/@zxing/library@0.19.1"></script>
 </head>
 
 <!--Nav removed, adjust CSS-->
@@ -118,57 +119,62 @@
     </div>
 
     <script>
-  // QR Code Scanner for Assigning Card ID and Auto Check-In
+<!--
+// QR Code Scanner for Assigning Card ID and Auto Check-In
 const scanQrButton = document.getElementById("scan-qr-button");
 const qrReaderDiv = document.getElementById("qr-reader");
 const cardIdInput = document.getElementById("card_id");
 
 scanQrButton.addEventListener("click", () => {
     qrReaderDiv.style.display = "block";
-
-    const html5QrCode = new Html5Qrcode("qr-reader");
-    html5QrCode.start(
-        { facingMode: "environment" },
-        { 
-            fps: 5,
-            qrbox: {width: 300, height: 300},
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: false // Force older API
-            } 
-        }, // Lower frame rate, Larger QR box
-        // Success callback
-        (decodedText) => {
-            // Automatically populate the card ID field
+    
+    // Create video element for ZXing
+    const video = document.createElement('video');
+    video.style.width = '100%';
+    qrReaderDiv.innerHTML = ''; // Clear previous content
+    qrReaderDiv.appendChild(video);
+    
+    // Add cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.margin = '10px 0';
+    cancelButton.style.padding = '8px 16px';
+    qrReaderDiv.appendChild(cancelButton);
+    
+    // Initialize ZXing codeReader
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    
+    // Start scanning
+    codeReader.decodeFromVideoDevice(undefined, video, (result, err) => {
+        if (result) {
+            // QR code detected - handle the result
+            const decodedText = result.getText();
+            console.log("QR Code detected:", decodedText);
+            
+            // Populate card ID field
             cardIdInput.value = decodedText;
-
-            // Send data to the server for automatic check-in
+            
+            // Prepare form data
             const formData = new FormData();
             formData.append("card_id", decodedText);
-
-            // Include other form fields if needed
+            
+            // Get other form fields
             const driverName = document.getElementById("driver_name").value;
             const providerName = document.getElementById("provider_name").value;
             const truckLicense = document.getElementById("truck_license").value;
-            const purposeOfVisit = document.getElementById("purpose_of_visit").value || ""; // Ensure it's not null
-            const pointOfContact = document.getElementById("point_of_contact").value || ""; // Ensure it's not null
+            const purposeOfVisit = document.getElementById("purpose_of_visit").value || "";
+            const pointOfContact = document.getElementById("point_of_contact").value || "";
             const photoData = document.getElementById("photo-data").value;
-
-            console.log("Sending Data:", {
-                driver_name: driverName,
-                provider_name: providerName,
-                truck_license: truckLicense,
-                purpose_of_visit: purposeOfVisit,
-                point_of_contact: pointOfContact,
-                photo_data: photoData ? "[DATA]" : "none" // Don't log full photo data
-            });
-
+            
+            // Add to form data
             formData.append("driver_name", driverName);
             formData.append("provider_name", providerName);
             formData.append("truck_license", truckLicense);
             formData.append("purpose_of_visit", purposeOfVisit);
             formData.append("point_of_contact", pointOfContact);
             formData.append("photo_data", photoData);
-
+            
+            // Submit the form
             fetch("/drivers", {
                 method: "POST",
                 body: formData,
@@ -176,7 +182,7 @@ scanQrButton.addEventListener("click", () => {
             .then((response) => {
                 if (response.ok) {
                     alert("Driver checked in successfully!");
-                    location.reload(); // Refresh the page to update the list
+                    location.reload();
                 } else {
                     alert("Failed to check in driver. Please try again.");
                 }
@@ -185,44 +191,57 @@ scanQrButton.addEventListener("click", () => {
                 console.error("Error during check-in:", err);
                 alert("An error occurred. Please try again.");
             });
-
-            // Stop the QR code scanner
-            html5QrCode.stop().then(() => {
-                qrReaderDiv.style.display = "none";
-            }).catch((err) => {
-                console.error("Error stopping QR Code scanner:", err);
-            });
-        },
-        // Error callback - correctly positioned outside the success callback
-        (errorMessage) => {
-            console.warn("QR Code Scan Error:", errorMessage);
+            
+            // Stop the scanner
+            codeReader.reset();
+            qrReaderDiv.style.display = "none";
         }
-    ).catch((err) => {
-        console.error("QR Code Scanner Initialization Error:", err);
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error("QR scanning error:", err);
+        }
+    }).catch((err) => {
+        console.error("Failed to start scanner:", err);
+        alert("Could not access camera. Please check permissions.");
+    });
+    
+    // Handle cancel button
+    cancelButton.addEventListener('click', () => {
+        codeReader.reset();
+        qrReaderDiv.style.display = "none";
     });
 });
 
-// QR Code Scanner for Driver Check-Out
+// QR Code Scanner for Driver Check-Out (using ZXing)
 const checkOutQrButton = document.getElementById("check-out-qr-button");
 const checkoutQrReaderDiv = document.getElementById("checkout-qr-reader");
 
 checkOutQrButton.addEventListener("click", () => {
     checkoutQrReaderDiv.style.display = "block";
-
-    const html5QrCode = new Html5Qrcode("checkout-qr-reader");
-    html5QrCode.start(
-        { facingMode: "environment" },
-        { 
-            fps: 5, 
-            qrbox: {width: 300, height: 300},
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: false // Force older API
-            }
-        },
-        (decodedText) => {
-            console.log("Decoded QR Code for Check Out:", decodedText);
-
-            // Send the decoded text (card ID) to the server for check out
+    
+    // Create video element for ZXing
+    const video = document.createElement('video');
+    video.style.width = '100%';
+    checkoutQrReaderDiv.innerHTML = ''; // Clear previous content
+    checkoutQrReaderDiv.appendChild(video);
+    
+    // Add cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.style.margin = '10px 0';
+    cancelButton.style.padding = '8px 16px';
+    checkoutQrReaderDiv.appendChild(cancelButton);
+    
+    // Initialize ZXing codeReader
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    
+    // Start scanning
+    codeReader.decodeFromVideoDevice(undefined, video, (result, err) => {
+        if (result) {
+            // QR code detected - handle the result
+            const decodedText = result.getText();
+            console.log("QR Code detected for checkout:", decodedText);
+            
+            // Send to server for checkout
             fetch(`/checkout/${encodeURIComponent(decodedText)}`, {
                 method: "POST"
             })
@@ -238,22 +257,26 @@ checkOutQrButton.addEventListener("click", () => {
                 console.error("Error during check out:", err);
                 alert("An error occurred. Please try again.");
             });
-
-            // Stop the QR code scanner
-            html5QrCode.stop().then(() => {
-                checkoutQrReaderDiv.style.display = "none";
-            }).catch(err => {
-                console.error("Error stopping QR Code scanner:", err);
-            });
-        },
-        (errorMessage) => {
-            console.warn("QR Code Scan Error:", errorMessage);
+            
+            // Stop the scanner
+            codeReader.reset();
+            checkoutQrReaderDiv.style.display = "none";
         }
-    ).catch((err) => {
-        console.error("QR Code Scanner Initialization Error:", err);
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error("QR scanning error:", err);
+        }
+    }).catch((err) => {
+        console.error("Failed to start scanner:", err);
+        alert("Could not access camera. Please check permissions.");
+    });
+    
+    // Handle cancel button
+    cancelButton.addEventListener('click', () => {
+        codeReader.reset();
+        checkoutQrReaderDiv.style.display = "none";
     });
 });
-
+-->
 // Photo Capture Script using MediaDevices API
 // Open Camera
 // Add this at the beginning of your script to check if elements exist
